@@ -11,7 +11,7 @@ services:
       - PORT=5000
       - ALLOWED_ORIGINS=http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:5001
     networks:
-      - app-network
+      - app-network-prod
     restart: unless-stopped
 
   frontend:
@@ -26,10 +26,10 @@ services:
     depends_on:
       - backend
     networks:
-      - app-network
+      - app-network-prod
     restart: unless-stopped
 
 networks:
-  app-network:
+  app-network-prod:
     driver: bridge
 

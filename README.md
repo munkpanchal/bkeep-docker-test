@@ -15,7 +15,8 @@ A full-stack dummy application for Docker testing with Node.js backend and React
 │   ├── public/
 │   ├── package.json
 │   └── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml        # Development configuration
+└── docker-compose.prod.yml   # Production configuration
 ```
 
 ## Features
@@ -23,42 +24,55 @@ A full-stack dummy application for Docker testing with Node.js backend and React
 - **Backend**: Express.js API with health check and user management endpoints
 - **Frontend**: React.js application with modern UI
 - **Docker**: Multi-container setup with docker-compose
+- **Environment Separation**: Separate configs for development and production
 
-## Quick Start
+## Development Setup
 
 ### Using Docker Compose (Recommended)
 
-1. Build and start all services:
+1. Start development services:
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 2. Access the application:
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
+   - Backend API: http://localhost:5001
 
-3. Stop all services:
+3. Stop services:
 ```bash
-docker-compose down
+docker compose down
 ```
 
-### Individual Docker Commands
+### Development Configuration
 
-#### Backend
+- **Frontend**: Port 3000, API URL: `http://localhost:5001`
+- **Backend**: Port 5001, Environment: `development`
+- **CORS**: Allows `http://localhost:3000` and `http://localhost:5001`
 
+## Production Setup
+
+### Using Production Docker Compose
+
+1. Build and start production services:
 ```bash
-cd backend
-docker build -t docker-test-backend .
-docker run -p 5000:5000 docker-test-backend
+docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-#### Frontend
+2. Access the application:
+   - Frontend: http://72.62.161.70/
+   - Backend API: http://72.62.161.70:5001
 
+3. Stop services:
 ```bash
-cd frontend
-docker build -t docker-test-frontend .
-docker run -p 3000:80 docker-test-frontend
+docker compose -f docker-compose.prod.yml down
 ```
+
+### Production Configuration
+
+- **Frontend**: Port 80, API URL: `http://72.62.161.70:5001`
+- **Backend**: Port 5001, Environment: `production`
+- **CORS**: Allows `http://72.62.161.70` and related URLs
 
 ## API Endpoints
 
@@ -67,9 +81,26 @@ docker run -p 3000:80 docker-test-frontend
 - `GET /api/users` - Get all users
 - `POST /api/users` - Create a new user
 
-## Development
+## Docker Commands
 
-### Backend (without Docker)
+### Development
+- Build images: `docker compose build`
+- Start services: `docker compose up`
+- Start in background: `docker compose up -d`
+- View logs: `docker compose logs -f`
+- Stop services: `docker compose down`
+- Rebuild and restart: `docker compose up --build`
+
+### Production
+- Build images: `docker compose -f docker-compose.prod.yml build`
+- Start services: `docker compose -f docker-compose.prod.yml up -d`
+- View logs: `docker compose -f docker-compose.prod.yml logs -f`
+- Stop services: `docker compose -f docker-compose.prod.yml down`
+- Rebuild and restart: `docker compose -f docker-compose.prod.yml up --build`
+
+## Development (without Docker)
+
+### Backend
 
 ```bash
 cd backend
@@ -77,7 +108,7 @@ npm install
 npm start
 ```
 
-### Frontend (without Docker)
+### Frontend
 
 ```bash
 cd frontend
@@ -85,19 +116,21 @@ npm install
 npm start
 ```
 
-## Docker Commands
+## Environment Variables
 
-- Build images: `docker-compose build`
-- Start services: `docker-compose up`
-- Start in background: `docker-compose up -d`
-- View logs: `docker-compose logs -f`
-- Stop services: `docker-compose down`
-- Rebuild and restart: `docker-compose up --build`
+### Development (docker-compose.yml)
+- `NODE_ENV=development`
+- `REACT_APP_API_URL=http://localhost:5001`
+- `ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5001`
+
+### Production (docker-compose.prod.yml)
+- `NODE_ENV=production`
+- `REACT_APP_API_URL=http://72.62.161.70:5001`
+- `ALLOWED_ORIGINS=http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:5001`
 
 ## Notes
 
 - The frontend is served via Nginx in production mode
-- Backend runs on port 5000
-- Frontend runs on port 3000 (mapped to Nginx port 80 in container)
-- Make sure ports 3000 and 5000 are available on your system
-
+- React environment variables are baked into the build at build time
+- CORS is configured differently for development and production
+- Make sure ports 3000 and 5001 (dev) or 80 and 5001 (prod) are available on your system
