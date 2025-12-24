@@ -3,13 +3,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: docker-test-backend
+    container_name: docker-test-backend-prod
     ports:
       - "5001:5000"
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - ALLOWED_ORIGINS=http://72.62.161.70,http://localhost:3000,http://localhost:5001
+      - ALLOWED_ORIGINS=http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:5001
     networks:
       - app-network
     restart: unless-stopped
@@ -20,7 +20,7 @@ services:
       dockerfile: Dockerfile
       args:
         - REACT_APP_API_URL=http://72.62.161.70:5001
-    container_name: docker-test-frontend
+    container_name: docker-test-frontend-prod
     ports:
       - "80:80"
     depends_on:
@@ -32,3 +32,4 @@ services:
 networks:
   app-network:
     driver: bridge
+
