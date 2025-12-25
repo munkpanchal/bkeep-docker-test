@@ -101,6 +101,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+    develop:
+      watch:
+        - path: ./backend/src
+          target: /app/src
+          action: sync
+        - path: ./backend/public
+          target: /app/public
+          action: sync
+        - path: ./backend/package.json
+          action: rebuild
+        - path: ./backend/pnpm-lock.yaml
+          action: rebuild
 
   mail-worker:
     build:
@@ -139,6 +151,18 @@ services:
       - bkeep-network-prod
     restart: unless-stopped
     command: ["node", "-r", "dotenv/config", "dist/workers/mail.worker.js"]
+    develop:
+      watch:
+        - path: ./backend/src
+          target: /app/src
+          action: sync
+        - path: ./backend/public
+          target: /app/public
+          action: sync
+        - path: ./backend/package.json
+          action: rebuild
+        - path: ./backend/pnpm-lock.yaml
+          action: rebuild
 
   frontend:
     build:

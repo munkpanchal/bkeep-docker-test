@@ -39,6 +39,18 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
         return { width: defaultWidth, height: defaultHeight };
     });
 
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     const [isResizing, setIsResizing] = useState(false);
     const [isDraggingCard, setIsDraggingCard] = useState(false);
     const [resizeType, setResizeType] = useState<'se' | 'e' | 's' | null>(null);
@@ -112,6 +124,11 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
     }, [dimensions, id, onResize]);
 
     const handleMouseDown = (e: React.MouseEvent, type: 'se' | 'e' | 's') => {
+        // Don't allow resizing on mobile
+        if (isMobile) {
+            return;
+        }
+
         e.preventDefault();
         e.stopPropagation();
         setIsResizing(true);
@@ -129,7 +146,11 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
     };
 
     const handleDragStart = (e: React.MouseEvent) => {
-        // Don't start drag if clicking on resize handles
+        // Don't start drag on mobile or if clicking on resize handles
+        if (isMobile) {
+            return;
+        }
+
         const target = e.target as HTMLElement;
         if (target.closest('[data-resize-handle]') || isResizing) {
             return;
@@ -234,11 +255,11 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
             ref={cardRef}
             className={`relative ${isResizing || isDraggingCard ? 'select-none' : ''} ${
                 isDragging || isDraggingCard ? 'opacity-50 z-50' : ''
-            } transition-opacity`}
+            } transition-opacity w-full lg:w-auto`}
             style={{
-                width: `${dimensions.width}px`,
+                width: isMobile ? '100%' : `${dimensions.width}px`,
                 height: `${dimensions.height}px`,
-                minWidth: `${minWidth}px`,
+                minWidth: isMobile ? '100%' : `${minWidth}px`,
                 minHeight: `${contentMinHeight}px`,
             }}
         >
@@ -249,11 +270,11 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
             >
                 {children}
             </div>
-            {/* Resize handles */}
+            {/* Resize handles - Hidden on mobile */}
             {/* Bottom-right corner handle (resize both) */}
             <div
                 data-resize-handle
-                className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize group z-10"
+                className="hidden lg:block absolute bottom-0 right-0 w-5 h-5 cursor-se-resize group z-10"
                 onMouseDown={(e) => handleMouseDown(e, 'se')}
             >
                 <div className="absolute bottom-0.5 right-0.5 w-4 h-4">
@@ -264,13 +285,13 @@ const ResizableCard: React.FC<ResizableCardProps> = ({
             {/* Right edge handle (resize width) */}
             <div
                 data-resize-handle
-                className="absolute top-0 right-0 w-2 h-full cursor-e-resize hover:bg-primary-10 transition-colors opacity-0 hover:opacity-100 z-10"
+                className="hidden lg:block absolute top-0 right-0 w-2 h-full cursor-e-resize hover:bg-primary-10 transition-colors opacity-0 hover:opacity-100 z-10"
                 onMouseDown={(e) => handleMouseDown(e, 'e')}
             ></div>
             {/* Bottom edge handle (resize height) */}
             <div
                 data-resize-handle
-                className="absolute bottom-0 left-0 w-full h-2 cursor-s-resize hover:bg-primary-10 transition-colors opacity-0 hover:opacity-100 z-10"
+                className="hidden lg:block absolute bottom-0 left-0 w-full h-2 cursor-s-resize hover:bg-primary-10 transition-colors opacity-0 hover:opacity-100 z-10"
                 onMouseDown={(e) => handleMouseDown(e, 's')}
             ></div>
         </div>
