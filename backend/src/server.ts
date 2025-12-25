@@ -6,7 +6,7 @@
 import http from 'node:http'
 
 import app from '@/app'
-import { env } from '@config/env'
+import { env, isProduction } from '@config/env'
 import logger from '@config/logger'
 
 /**
@@ -29,8 +29,16 @@ const startServer = async (): Promise<void> => {
     const server = http.createServer(app)
 
     server.listen(env.PORT, env.HOST, () => {
-      // Use localhost for display when binding to 0.0.0.0 (Docker/all interfaces)
-      const displayHost = env.HOST === '0.0.0.0' ? 'localhost' : env.HOST
+      // Use production URL for display in production, localhost for development
+      let displayHost = env.HOST === '0.0.0.0' ? 'localhost' : env.HOST
+      if (isProduction() && env.FRONTEND_URL) {
+        try {
+          const frontendUrl = new URL(env.FRONTEND_URL)
+          displayHost = frontendUrl.hostname
+        } catch {
+          // If FRONTEND_URL is invalid, keep default
+        }
+      }
 
       logger.info(`🚀 Server running at: http://${displayHost}:${env.PORT}`)
       logger.info(

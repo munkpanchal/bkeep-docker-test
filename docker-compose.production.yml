@@ -32,8 +32,9 @@ services:
       - NODE_ENV=production
       - PORT=8000
       - HOST=0.0.0.0
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000,http://72.62.161.70/}
       - FRONTEND_URL=${FRONTEND_URL:-http://72.62.161.70}
+      - API_PREFIX=${API_PREFIX:-/api/v1}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-bkeep}
