@@ -26,6 +26,7 @@ COPY . .
 # Build server to dist
 RUN pnpm run build
 
+
 # -----------------------------------------------------------------------------
 # Development image
 # - Contains sources and dev dependencies

@@ -1,25 +1,59 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: docker-test-postgres
+    environment:
+      - POSTGRES_DB=bkeep
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: dev
     container_name: docker-test-backend
     ports:
-      - "5001:5000"
+      - "8000:8000"
     environment:
       - NODE_ENV=development
-      - PORT=5000
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5001
+      - PORT=8000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:8000,http://72.62.161.70:80
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=bkeep
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_SSL=false
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - app-network
     restart: unless-stopped
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/public:/app/public
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=http://localhost:5001
+        - VITE_API_ENDPOINT=http://72.62.161.70:8000/api/v1
     container_name: docker-test-frontend
     ports:
       - "3000:80"
@@ -32,3 +66,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
