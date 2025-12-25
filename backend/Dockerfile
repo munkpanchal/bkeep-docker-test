@@ -63,16 +63,19 @@ COPY public ./public
 COPY --from=builder /app/src/database/migrations ./src/database/migrations
 COPY --from=builder /app/src/database/seeds ./src/database/seeds
 
-# Create knexfile wrapper for production migrations
+# Create knexfile wrapper for production migrations and seeds
 # Since knexfile.ts requires TypeScript/ts-node, we create a .js wrapper
 # that re-exports the compiled knexfile from dist
-RUN mkdir -p /app/src/config && \
-    echo "// Production wrapper for knexfile" > /app/src/config/knexfile.js && \
-    echo "// This allows 'pnpm db:migrate' to work in production" >> /app/src/config/knexfile.js && \
-    echo "// It re-exports the compiled knexfile from dist" >> /app/src/config/knexfile.js && \
-    echo "module.exports = require('../../dist/config/knexfile.js').default;" >> /app/src/config/knexfile.js && \
-    echo "// Also create .ts version that requires the .js version" > /app/src/config/knexfile.ts && \
-    echo "module.exports = require('./knexfile.js');" >> /app/src/config/knexfile.ts
+# This allows both db:migrate and db:seed commands to work
+RUN mkdir -p src/config && \
+    echo "// Production wrapper for knexfile" > src/config/knexfile.js && \
+    echo "// This allows 'pnpm db:migrate' and 'pnpm db:seed' to work in production" >> src/config/knexfile.js && \
+    echo "// It re-exports the compiled knexfile from dist" >> src/config/knexfile.js && \
+    echo "const knexConfig = require('../../dist/config/knexfile.js').default;" >> src/config/knexfile.js && \
+    echo "module.exports = knexConfig;" >> src/config/knexfile.js && \
+    echo "// TypeScript wrapper that requires the .js version" > src/config/knexfile.ts && \
+    echo "module.exports = require('./knexfile.js');" >> src/config/knexfile.ts && \
+    chmod 644 src/config/knexfile.js src/config/knexfile.ts
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
