@@ -22,7 +22,7 @@ ENV VITE_API_ENDPOINT=$VITE_API_ENDPOINT
 RUN npx vite build
 
 # Production stage
-FROM nginx:alpine
+FROM nginx:alpine AS production
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
