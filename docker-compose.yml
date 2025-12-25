@@ -1,109 +1,156 @@
+name: bkeep
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bkeep-postgres-prod
+    container_name: docker-test-postgres
     environment:
-      - POSTGRES_DB=${DB_NAME:-bkeep}
-      - POSTGRES_USER=${DB_USER:-postgres}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=bkeep
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "5433:5432"
     volumes:
-      - postgres_data_prod:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - bkeep-network-prod
+      - app-network
     restart: unless-stopped
     healthcheck:
-      test:
-        ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-bkeep}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: docker-test-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: prod
-    container_name: bkeep-backend-prod
+      target: dev
+    container_name: docker-test-backend
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "8000:8000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=8000
       - HOST=0.0.0.0
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000,http://72.62.161.70/}
-      - FRONTEND_URL=${FRONTEND_URL:-http://72.62.161.70}
-      - API_PREFIX=${API_PREFIX:-/api/v1}
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:8000,http://72.62.161.70:80
+      - FRONTEND_URL=http://localhost:3000
+      - API_PREFIX=/api/v1
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=${DB_NAME:-bkeep}
-      - DB_USER=${DB_USER:-postgres}
-      - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      - DB_SSL=${DB_SSL:-false}
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-change-me-in-production}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-change-me-in-production}
-      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - DB_NAME=bkeep
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_SSL=false
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-dev-secret-key}
+      - ACCESS_TOKEN_EXPIRY=${ACCESS_TOKEN_EXPIRY:-1h}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-dev-refresh-secret}
+      - REFRESH_TOKEN_EXPIRY=${REFRESH_TOKEN_EXPIRY:-7d}
+      - SESSION_SECRET=${SESSION_SECRET:-dev-session-secret}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=${REDIS_USERNAME:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_SSL=${REDIS_SSL:-false}
+      - MAIL_QUEUE_ENABLED=${MAIL_QUEUE_ENABLED:-true}
+      - MAIL_QUEUE_ATTEMPTS=${MAIL_QUEUE_ATTEMPTS:-3}
+      - MAIL_QUEUE_BACKOFF_DELAY=${MAIL_QUEUE_BACKOFF_DELAY:-5000}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@bkeep.ca}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-BKeep}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-72.62.161.70}
       - RUN_SEEDS=${RUN_SEEDS:-false}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/public:/app/public
+      - public:/app/public
     networks:
-      - bkeep-network-prod
+      - app-network
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8000/health",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+
+  mail-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: docker-test-mail-worker
+    environment:
+      - NODE_ENV=development
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=bkeep
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_SSL=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=${REDIS_USERNAME:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_SSL=${REDIS_SSL:-false}
+      - MAIL_QUEUE_ENABLED=${MAIL_QUEUE_ENABLED:-true}
+      - MAIL_QUEUE_ATTEMPTS=${MAIL_QUEUE_ATTEMPTS:-3}
+      - MAIL_QUEUE_BACKOFF_DELAY=${MAIL_QUEUE_BACKOFF_DELAY:-5000}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@bkeep.ca}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-BKeep}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/public:/app/public
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: ["pnpm", "run", "worker:mail:dev"]
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: production
       args:
-        - VITE_API_ENDPOINT=http://72.62.161.70:8000/api/v1
-    container_name: bkeep-frontend-prod
+        - VITE_API_ENDPOINT=http://localhost:8000/api/v1
+    container_name: docker-test-frontend
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
     networks:
-      - bkeep-network-prod
+      - app-network
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:80",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
 networks:
-  bkeep-network-prod:
+  app-network:
     driver: bridge
 
 volumes:
-  postgres_data_prod:
+  postgres_data:
+  public:

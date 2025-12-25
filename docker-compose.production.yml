@@ -1,3 +1,5 @@
+name: bkeep
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -16,9 +18,22 @@ services:
     healthcheck:
       test:
         ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-bkeep}"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: bkeep-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    networks:
+      - bkeep-network-prod
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     build:
@@ -27,32 +42,48 @@ services:
       target: prod
     container_name: bkeep-backend-prod
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${PORT:-8000}:8000"
     environment:
-      - NODE_ENV=production
-      - PORT=8000
+      - NODE_ENV=${NODE_ENV:-production}
       - HOST=0.0.0.0
-      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000,http://72.62.161.70/}
-      - FRONTEND_URL=${FRONTEND_URL:-http://72.62.161.70}
-      - API_PREFIX=${API_PREFIX:-/api/v1}
+      - PORT=${PORT:-8000}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-bkeep}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_SSL=${DB_SSL:-false}
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-change-me-in-production}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-change-me-in-production}
-      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
+      - ACCESS_TOKEN_EXPIRY=${ACCESS_TOKEN_EXPIRY:-1h}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
+      - REFRESH_TOKEN_EXPIRY=${REFRESH_TOKEN_EXPIRY:-7d}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - API_PREFIX=${API_PREFIX:-/api/v1}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://72.62.161.70}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-72.62.161.70}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=${REDIS_USERNAME:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_SSL=${REDIS_SSL:-false}
+      - MAIL_QUEUE_ENABLED=${MAIL_QUEUE_ENABLED:-true}
+      - MAIL_QUEUE_ATTEMPTS=${MAIL_QUEUE_ATTEMPTS:-3}
+      - MAIL_QUEUE_BACKOFF_DELAY=${MAIL_QUEUE_BACKOFF_DELAY:-5000}
       - EMAIL_FROM=${EMAIL_FROM:-noreply@bkeep.ca}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-BKeep}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-72.62.161.70}
       - RUN_SEEDS=${RUN_SEEDS:-false}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - public:/app/public
     networks:
       - bkeep-network-prod
     restart: unless-stopped
@@ -70,6 +101,44 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  mail-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: prod
+    container_name: bkeep-mail-worker-prod
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-bkeep}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_SSL=${DB_SSL:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_USERNAME=${REDIS_USERNAME:-}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_SSL=${REDIS_SSL:-false}
+      - MAIL_QUEUE_ENABLED=${MAIL_QUEUE_ENABLED:-true}
+      - MAIL_QUEUE_ATTEMPTS=${MAIL_QUEUE_ATTEMPTS:-3}
+      - MAIL_QUEUE_BACKOFF_DELAY=${MAIL_QUEUE_BACKOFF_DELAY:-5000}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@bkeep.ca}
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME:-BKeep}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bkeep-network-prod
+    restart: unless-stopped
+    command: ["node", "-r", "dotenv/config", "dist/workers/mail.worker.js"]
 
   frontend:
     build:
@@ -107,3 +176,4 @@ networks:
 
 volumes:
   postgres_data_prod:
+  public:

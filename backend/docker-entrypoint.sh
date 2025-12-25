@@ -29,6 +29,35 @@ until node -e "
   sleep 2
 done
 
+# Wait for Redis to be ready (if REDIS_HOST is set)
+if [ -n "$REDIS_HOST" ]; then
+  echo "⏳ Waiting for Redis to be ready..."
+  until node -e "
+    const redis = require('redis');
+    const client = redis.createClient({
+      socket: {
+        host: process.env.REDIS_HOST || 'redis',
+        port: parseInt(process.env.REDIS_PORT || '6379')
+      },
+      password: process.env.REDIS_PASSWORD || undefined,
+      database: parseInt(process.env.REDIS_DB || '0')
+    });
+    client.connect()
+      .then(() => {
+        console.log('✅ Redis is ready');
+        client.quit();
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.log('⏳ Redis not ready yet...');
+        client.quit();
+        process.exit(1);
+      });
+  " 2>/dev/null; do
+    sleep 2
+  done
+fi
+
 # Run migrations
 echo "🔄 Running database migrations..."
 if [ -f "node_modules/.bin/knex" ]; then

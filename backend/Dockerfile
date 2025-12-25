@@ -67,9 +67,13 @@ COPY --from=builder /app/src/database/seeds ./src/database/seeds
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
+# Create public directory for file uploads
+RUN mkdir -p /app/public
+
 # Expose port
 EXPOSE 8000
 
+# Default command (can be overridden in docker-compose)
 # Start server with entrypoint (runs migrations and seeds first)
 CMD ["/app/docker-entrypoint.sh"]
 
