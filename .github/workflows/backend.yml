@@ -12,7 +12,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/docker-test-backend
+  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/bkeep-backend
 
 jobs:
   build-and-deploy:
@@ -45,6 +45,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
+          dockerfile: ./backend/Dockerfile
+          target: prod
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -60,38 +62,61 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
 
-            # Export Docker username for docker-compose
-            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-
             # Pull latest image
             echo "Pulling latest backend image..."
             docker pull ${{ env.IMAGE_NAME }}:latest
 
+            # Update docker-compose to use Docker Hub image instead of build
+            # Create a temporary override file
+            cat > docker-compose.override.yml << 'EOF'
+            services:
+              backend:
+                image: ${IMAGE_NAME}:latest
+            EOF
+            # Replace placeholder with actual image name
+            sed -i "s|\${IMAGE_NAME}|${{ env.IMAGE_NAME }}|g" docker-compose.override.yml
+
             # Use docker-compose for zero-downtime deployment
             # This will recreate the container with the new image
             echo "Updating backend container..."
-            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate backend
+            docker compose -f docker-compose.production.yml -f docker-compose.override.yml pull backend
+            docker compose -f docker-compose.production.yml -f docker-compose.override.yml up -d --no-deps --force-recreate backend
 
             # Wait for health check
             echo "Waiting for backend to be healthy..."
-            sleep 15
+            MAX_WAIT=90
+            WAIT_TIME=0
+            while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+              if docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec -T backend wget --quiet --tries=1 --spider --timeout=5 http://localhost:8000/health 2>/dev/null; then
+                echo "✅ Backend is healthy!"
+                break
+              fi
+              echo "Waiting for health check... ($WAIT_TIME/$MAX_WAIT seconds)"
+              sleep 5
+              WAIT_TIME=$((WAIT_TIME + 5))
+            done
 
             # Check if container is running and healthy
-            if docker ps | grep -q "docker-test-backend-prod"; then
-              # Verify health endpoint
-              HEALTH_CHECK=$(docker exec docker-test-backend-prod wget --quiet --tries=1 --spider --timeout=5 http://localhost:5000/api/health 2>&1)
-              if [ $? -eq 0 ]; then
+            if docker ps | grep -q "bkeep-backend-prod"; then
+              # Verify health endpoint one more time
+              if docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec -T backend wget --quiet --tries=1 --spider --timeout=5 http://localhost:8000/health 2>/dev/null; then
                 echo "✅ Backend deployed successfully and healthy!"
 
                 # Clean up old images (keep last 2)
                 docker image prune -f --filter "until=24h"
+
+                # Remove temporary override file
+                rm -f docker-compose.override.yml
               else
-                echo "⚠️ Container running but health check failed"
-                echo "Health check output: $HEALTH_CHECK"
-                # Don't fail, container might still be starting
+                echo "⚠️ Container running but health check failed after $MAX_WAIT seconds"
+                docker compose -f docker-compose.production.yml -f docker-compose.override.yml logs --tail=50 backend
+                rm -f docker-compose.override.yml
+                exit 1
               fi
             else
               echo "❌ Deployment failed - container not running"
+              docker compose -f docker-compose.production.yml -f docker-compose.override.yml ps backend
+              rm -f docker-compose.override.yml
               exit 1
             fi
 
@@ -103,5 +128,13 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
-            docker compose -f docker-compose.prod.yml ps backend
-            docker compose -f docker-compose.prod.yml logs --tail=20 backend
+            COMPOSE_FILES="-f docker-compose.production.yml"
+            if [ -f docker-compose.override.yml ]; then
+              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.override.yml"
+            fi
+            echo "=== Container Status ==="
+            docker compose $COMPOSE_FILES ps backend
+            echo -e "\n=== Recent Logs ==="
+            docker compose $COMPOSE_FILES logs --tail=30 backend
+            echo -e "\n=== Health Check ==="
+            docker compose $COMPOSE_FILES exec -T backend wget -q -O- http://localhost:8000/health || echo "Health check failed"
