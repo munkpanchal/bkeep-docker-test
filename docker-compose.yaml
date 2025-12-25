@@ -3,33 +3,32 @@ name: bkeep
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: docker-test-postgres
+    container_name: bkeep-postgres-prod
     environment:
-      - POSTGRES_DB=bkeep
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${DB_NAME:-bkeep}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
     ports:
-      - "5433:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_prod:/var/lib/postgresql/data
     networks:
-      - app-network
+      - bkeep-network-prod
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-bkeep}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
-    container_name: docker-test-redis
+    container_name: bkeep-redis-prod
     restart: unless-stopped
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     networks:
-      - app-network
+      - bkeep-network-prod
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 5s
@@ -40,29 +39,29 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: dev
-    container_name: docker-test-backend
+      target: prod
+    container_name: bkeep-backend-prod
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     environment:
-      - NODE_ENV=development
-      - PORT=8000
+      - NODE_ENV=${NODE_ENV:-production}
       - HOST=0.0.0.0
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:8000,http://72.62.161.70:80
-      - FRONTEND_URL=http://localhost:3000
-      - API_PREFIX=/api/v1
+      - PORT=${PORT:-8000}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=bkeep
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_SSL=false
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-dev-secret-key}
+      - DB_NAME=${DB_NAME:-bkeep}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_SSL=${DB_SSL:-false}
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
       - ACCESS_TOKEN_EXPIRY=${ACCESS_TOKEN_EXPIRY:-1h}
-      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET:-dev-refresh-secret}
+      - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
       - REFRESH_TOKEN_EXPIRY=${REFRESH_TOKEN_EXPIRY:-7d}
-      - SESSION_SECRET=${SESSION_SECRET:-dev-session-secret}
-      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - API_PREFIX=${API_PREFIX:-/api/v1}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:8000}
+      - FRONTEND_URL=${FRONTEND_URL:-http://72.62.161.70}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-72.62.161.70}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_USERNAME=${REDIS_USERNAME:-}
@@ -84,12 +83,24 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend/src:/app/src
-      - ./backend/public:/app/public
       - public:/app/public
     networks:
-      - app-network
+      - bkeep-network-prod
     restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8000/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
     develop:
       watch:
         - path: ./backend/src
@@ -107,16 +118,16 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: dev
-    container_name: docker-test-mail-worker
+      target: prod
+    container_name: bkeep-mail-worker-prod
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-production}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=bkeep
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_SSL=false
+      - DB_NAME=${DB_NAME:-bkeep}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_SSL=${DB_SSL:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_USERNAME=${REDIS_USERNAME:-}
@@ -136,13 +147,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./backend/src:/app/src
-      - ./backend/public:/app/public
     networks:
-      - app-network
+      - bkeep-network-prod
     restart: unless-stopped
-    command: ["pnpm", "run", "worker:mail:dev"]
+    command: ["node", "-r", "dotenv/config", "dist/workers/mail.worker.js"]
     develop:
       watch:
         - path: ./backend/src
@@ -160,21 +168,36 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: production
       args:
-        - VITE_API_ENDPOINT=http://localhost:8000/api/v1
-    container_name: docker-test-frontend
+        - VITE_API_ENDPOINT=${VITE_API_ENDPOINT:-http://72.62.161.70:8000/api/v1}
+    container_name: bkeep-frontend-prod
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-80}:80"
     depends_on:
       - backend
     networks:
-      - app-network
+      - bkeep-network-prod
     restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:80",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
-  app-network:
+  bkeep-network-prod:
     driver: bridge
 
 volumes:
-  postgres_data:
+  postgres_data_prod:
   public:
