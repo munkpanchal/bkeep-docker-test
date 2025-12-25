@@ -11,8 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/bkeep-frontend
+  VITE_API_ENDPOINT: ${{ secrets.VITE_API_ENDPOINT || 'http://72.62.161.70:8000/api/v1' }}
 
 jobs:
   build-and-deploy:
@@ -25,71 +24,56 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           dockerfile: ./frontend/Dockerfile
           target: production
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          push: false
+          tags: bkeep-frontend:latest
           build-args: |
-            VITE_API_ENDPOINT=${{ secrets.VITE_API_ENDPOINT || 'http://72.62.161.70:8000/api/v1' }}
-          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+            VITE_API_ENDPOINT=${{ env.VITE_API_ENDPOINT }}
+          outputs: type=docker,dest=/tmp/frontend-image.tar
 
-      - name: Deploy to server
+      - name: Transfer image to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "/tmp/frontend-image.tar"
+          target: "/tmp/"
+
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
 
-            # Pull latest image
-            echo "Pulling latest frontend image..."
-            docker pull ${{ env.IMAGE_NAME }}:latest
+            # Load the Docker image
+            echo "Loading Docker image..."
+            docker load -i /tmp/frontend-image.tar
+            docker tag bkeep-frontend:latest bkeep-production-frontend:latest
 
-            # Update docker-compose to use Docker Hub image instead of build
-            # Create a temporary override file
-            cat > docker-compose.override.yml << 'EOF'
-            services:
-              frontend:
-                image: ${IMAGE_NAME}:latest
-            EOF
-            # Replace placeholder with actual image name
-            sed -i "s|\${IMAGE_NAME}|${{ env.IMAGE_NAME }}|g" docker-compose.override.yml
+            # Clean up the tar file
+            rm -f /tmp/frontend-image.tar
 
             # Use docker-compose for zero-downtime deployment
-            # This will recreate the container with the new image
             echo "Updating frontend container..."
-            docker compose -f docker-compose.production.yml -f docker-compose.override.yml pull frontend
-            docker compose -f docker-compose.production.yml -f docker-compose.override.yml up -d --no-deps --force-recreate frontend
+            docker compose -f docker-compose.production.yml up -d --no-deps --force-recreate frontend
 
             # Wait for health check
             echo "Waiting for frontend to be healthy..."
             MAX_WAIT=60
             WAIT_TIME=0
             while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-              if docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec -T frontend wget --quiet --tries=1 --spider --timeout=5 http://localhost:80 2>/dev/null; then
+              if docker compose -f docker-compose.production.yml exec -T frontend wget --quiet --tries=1 --spider --timeout=5 http://localhost:80 2>/dev/null; then
                 echo "✅ Frontend is healthy!"
                 break
               fi
@@ -101,42 +85,34 @@ jobs:
             # Check if container is running and healthy
             if docker ps | grep -q "bkeep-frontend-prod"; then
               # Verify health endpoint one more time
-              if docker compose -f docker-compose.production.yml -f docker-compose.override.yml exec -T frontend wget --quiet --tries=1 --spider --timeout=5 http://localhost:80 2>/dev/null; then
+              if docker compose -f docker-compose.production.yml exec -T frontend wget --quiet --tries=1 --spider --timeout=5 http://localhost:80 2>/dev/null; then
                 echo "✅ Frontend deployed successfully and healthy!"
 
                 # Clean up old images (keep last 2)
                 docker image prune -f --filter "until=24h"
-
-                # Remove temporary override file
-                rm -f docker-compose.override.yml
               else
                 echo "⚠️ Container running but health check failed after $MAX_WAIT seconds"
-                docker compose -f docker-compose.production.yml -f docker-compose.override.yml logs --tail=50 frontend
-                rm -f docker-compose.override.yml
+                docker compose -f docker-compose.production.yml logs --tail=50 frontend
                 exit 1
               fi
             else
               echo "❌ Deployment failed - container not running"
-              docker compose -f docker-compose.production.yml -f docker-compose.override.yml ps frontend
-              rm -f docker-compose.override.yml
+              docker compose -f docker-compose.production.yml ps frontend
               exit 1
             fi
 
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
-            COMPOSE_FILES="-f docker-compose.production.yml"
-            if [ -f docker-compose.override.yml ]; then
-              COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.override.yml"
-            fi
             echo "=== Container Status ==="
-            docker compose $COMPOSE_FILES ps frontend
+            docker compose -f docker-compose.production.yml ps frontend
             echo -e "\n=== Recent Logs ==="
-            docker compose $COMPOSE_FILES logs --tail=30 frontend
+            docker compose -f docker-compose.production.yml logs --tail=30 frontend
             echo -e "\n=== Health Check ==="
-            docker compose $COMPOSE_FILES exec -T frontend wget -q -O- http://localhost:80 | head -1 || echo "Health check failed"
+            docker compose -f docker-compose.production.yml exec -T frontend wget -q -O- http://localhost:80 | head -1 || echo "Health check failed"

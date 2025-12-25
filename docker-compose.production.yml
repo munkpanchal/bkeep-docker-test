@@ -43,10 +43,7 @@ services:
   # Backend API
   backend:
     container_name: bkeep-backend-prod
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: prod
+    image: bkeep-production-backend:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -158,12 +155,7 @@ services:
   # Frontend
   frontend:
     container_name: bkeep-frontend-prod
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: production
-      args:
-        - VITE_API_ENDPOINT=${VITE_API_ENDPOINT:-http://72.62.161.70:8000/api/v1}
+    image: bkeep-production-frontend:latest
     restart: unless-stopped
     depends_on:
       backend:
