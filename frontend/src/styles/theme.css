@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+:root {
+    /* Primary color */
+    --r: 197;
+    --g: 90;
+    --b: 17;
+
+    /* Secondary color */
+    --sr: 94;
+    --sg: 23;
+    --sb: 235;
+}
+
+@theme {
+    --color-lightBg: rgb(252 247 239);
+    --color-primary: rgba(var(--r), var(--g), var(--b), 1);
+    --color-primary-10: rgba(var(--r), var(--g), var(--b), 0.1);
+    /* --color-primary-25: rgba(var(--r), var(--g), var(--b), 0.25);
+    --color-primary-50: rgba(var(--r), var(--g), var(--b), 0.5);
+    --color-primary-75: rgba(var(--r), var(--g), var(--b), 0.75); */
+    --color-primary-25: rgba(0, 0, 0, 0.25);
+    --color-primary-50: rgba(0, 0, 0, 0.75);
+    --color-primary-75: rgba(0, 0, 0, 0.95);
+
+    --radius-2: 2px;
+
+    --color-secondary: rgba(var(--sr), var(--sg), var(--sb), 1);
+    --color-secondary-10: rgba(var(--sr), var(--sg), var(--sb), 0.1);
+    --color-secondary-50: rgba(var(--sr), var(--sg), var(--sb), 0.5);
+    --color-secondary-75: rgba(var(--sr), var(--sg), var(--sb), 0.75);
+}

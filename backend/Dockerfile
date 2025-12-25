@@ -1,21 +1,75 @@
-# Use official Node.js runtime as base image
-FROM node:18-alpine
+# syntax=docker/dockerfile:1.7
 
-# Set working directory
+# -----------------------------------------------------------------------------
+# Base setup with pnpm and workspace
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS base
 WORKDIR /app
+ENV NODE_ENV=production
 
-# Copy package files
-COPY package*.json ./
+# Enable corepack (pnpm)
+RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 
-# Install dependencies
-RUN npm install
+# Install dependencies separately for better caching
+FROM base AS deps
+ENV NODE_ENV=development
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
 
-# Copy application code
+# -----------------------------------------------------------------------------
+# Builder: compile TypeScript to dist
+# -----------------------------------------------------------------------------
+FROM base AS builder
+ENV NODE_ENV=development
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# Build server to dist
+RUN pnpm run build
+
+# -----------------------------------------------------------------------------
+# Development image
+# - Contains sources and dev dependencies
+# -----------------------------------------------------------------------------
+FROM base AS dev
+ENV NODE_ENV=development
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+EXPOSE 8000
+# Default dev command can be overridden by compose
+CMD ["pnpm", "dev"]
+
+# -----------------------------------------------------------------------------
+# Production runtime image
+# - Copies only built artifacts and production deps
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS prod
+WORKDIR /app
+ENV NODE_ENV=production
+# Install wget for health checks
+RUN apk add --no-cache wget
+RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
+
+COPY package.json pnpm-lock.yaml* ./
+# Skip lifecycle scripts (e.g., husky prepare) during production install
+ENV PNPM_SKIP_LIFECYCLE_SCRIPTS=true HUSKY=0
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+
+# Copy built files and public assets
+COPY --from=builder /app/dist ./dist
+COPY public ./public
+
+# Copy migration and seed files (needed for database setup)
+COPY --from=builder /app/src/database/migrations ./src/database/migrations
+COPY --from=builder /app/src/database/seeds ./src/database/seeds
+
+# Copy entrypoint script
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Expose port
-EXPOSE 5000
+EXPOSE 8000
 
-# Start the application
-CMD ["npm", "start"]
+# Start server with entrypoint (runs migrations and seeds first)
+CMD ["/app/docker-entrypoint.sh"]
+
 

@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+* {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: 0.125px;
+    line-height: 1.5;
+}
+
+input {
+    @apply accent-primary focus:accent-primary focus:ring-0 focus:ring-offset-0 focus:outline-none focus:border-0 focus:shadow-none focus:bg-transparent focus:text-primary focus:placeholder:text-primary-50 focus:placeholder:opacity-100 focus:placeholder:font-light;
+}
+
+/* .public-route, */
+.protected-route {
+    @apply bg-primary-25 text-black p-2 h-screen;
+}
+
+/* .public-route-wrapper, */
+.protected-route-wrapper {
+    @apply bg-lightBg flex flex-col items-center justify-center h-full rounded-2 overflow-hidden;
+}

@@ -128,9 +128,25 @@ npm start
 - `REACT_APP_API_URL=http://72.62.161.70:5001`
 - `ALLOWED_ORIGINS=http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70:5001`
 
+## CI/CD with GitHub Actions
+
+This project includes GitHub Actions workflows for automated deployment:
+
+- **Backend Workflow**: `.github/workflows/backend.yml` - Deploys backend on code changes
+- **Frontend Workflow**: `.github/workflows/frontend.yml` - Deploys frontend on code changes
+
+### Features
+- ✅ Zero-downtime deployments
+- ✅ Automatic builds on push
+- ✅ Health checks before switching
+- ✅ Separate repos for frontend/backend
+
+See [GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md) for detailed setup instructions.
+
 ## Notes
 
 - The frontend is served via Nginx in production mode
 - React environment variables are baked into the build at build time
 - CORS is configured differently for development and production
 - Make sure ports 3000 and 5001 (dev) or 80 and 5001 (prod) are available on your system
+- Production uses Docker Hub images (configured in `docker-compose.prod.yml`)

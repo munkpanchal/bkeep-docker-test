@@ -1,0 +1,193 @@
+name: bkeep-production
+
+services:
+  # PostgreSQL Database
+  postgres:
+    container_name: bkeep-postgres-prod
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bkeep}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-bkeep}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bkeep-network
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+  # Redis Cache
+  redis:
+    container_name: bkeep-redis-prod
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bkeep-network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # Backend API
+  backend:
+    container_name: bkeep-backend-prod
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${BACKEND_PORT:-8000}
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-bkeep}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_SSL: ${DB_SSL:-false}
+      # JWT
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:-dev-access-token-secret-change-in-production}
+      ACCESS_TOKEN_EXPIRY: ${ACCESS_TOKEN_EXPIRY:-1h}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-dev-refresh-token-secret-change-in-production}
+      REFRESH_TOKEN_EXPIRY: ${REFRESH_TOKEN_EXPIRY:-7d}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-session-secret-change-in-production}
+      # API
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://72.62.161.70,http://72.62.161.70:80,http://72.62.161.70/,http://localhost:80,http://localhost,http://72.62.161.70:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://72.62.161.70}
+      # WebAuthn
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-72.62.161.70}
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      # Mail Queue
+      MAIL_QUEUE_ENABLED: ${MAIL_QUEUE_ENABLED:-true}
+      MAIL_QUEUE_ATTEMPTS: ${MAIL_QUEUE_ATTEMPTS:-3}
+      MAIL_QUEUE_BACKOFF_DELAY: ${MAIL_QUEUE_BACKOFF_DELAY:-5000}
+      # Email
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@bkeep.ca}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-BKeep}
+      # AWS SES
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # Run seeds on first deployment
+      RUN_SEEDS: ${RUN_SEEDS:-false}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - backend_public:/app/public
+    networks:
+      - bkeep-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # Mail Worker
+  mail-worker:
+    container_name: bkeep-mail-worker-prod
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-bkeep}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_SSL: ${DB_SSL:-false}
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: ${REDIS_USERNAME:-}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      # Mail Queue
+      MAIL_QUEUE_ENABLED: ${MAIL_QUEUE_ENABLED:-true}
+      MAIL_QUEUE_ATTEMPTS: ${MAIL_QUEUE_ATTEMPTS:-3}
+      MAIL_QUEUE_BACKOFF_DELAY: ${MAIL_QUEUE_BACKOFF_DELAY:-5000}
+      # Email
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@bkeep.ca}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-BKeep}
+      # AWS SES
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    command: node dist/workers/mail.worker.js
+    networks:
+      - bkeep-network
+
+  # Frontend
+  frontend:
+    container_name: bkeep-frontend-prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - VITE_API_ENDPOINT=${VITE_API_ENDPOINT:-http://72.62.161.70:8000/api/v1}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - bkeep-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_public:
+    driver: local
+
+networks:
+  bkeep-network:
+    driver: bridge
+

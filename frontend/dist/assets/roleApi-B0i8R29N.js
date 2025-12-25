@@ -1,0 +1,1 @@
+import{b as e}from"./react-query-BvwtvcJK.js";import{q as s}from"./index-HjQGXCX9.js";async function r(){return(await s.get("/roles")).data}const a=()=>e({queryKey:["roles"],queryFn:r});export{a as u};

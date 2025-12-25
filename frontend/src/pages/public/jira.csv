@@ -1,0 +1,40 @@
+Issue Type,Summary,Description,Epic Name
+Epic,Accounts Management UI,UI to manage accounts using provided APIs,Accounts Management UI
+
+Story,Accounts List UI,View all accounts in a table with API integration,Accounts Management UI
+Task,Build accounts table UI,Create responsive table layout for accounts,Accounts Management UI
+Task,Integrate GET /accounts,Fetch and display accounts list from API,Accounts Management UI
+Task,Handle loading & error states,Show loader and error UI for accounts list,Accounts Management UI
+
+Story,Create Account UI,Create new account using UI form,Accounts Management UI
+Task,Build create account form,Design and implement create account form,Accounts Management UI
+Task,Integrate POST /accounts,Submit form data to create account API,Accounts Management UI
+Task,Show success & error feedback,Display toast/messages on create response,Accounts Management UI
+
+Story,Account Details UI,View details of a specific account,Accounts Management UI
+Task,Build account details screen,Create UI for account details view,Accounts Management UI
+Task,Integrate GET /accounts/{id},Fetch account details by ID,Accounts Management UI
+
+Story,Update Account UI,Edit existing account details,Accounts Management UI
+Task,Build edit account form,Editable form with pre-filled data,Accounts Management UI
+Task,Integrate PUT /accounts/{id},Update account data via API,Accounts Management UI
+
+Story,Delete Account UI,Delete account with confirmation,Accounts Management UI
+Task,Add delete confirmation modal,Confirmation before delete action,Accounts Management UI
+Task,Integrate DELETE /accounts/{id},Call delete account API,Accounts Management UI
+
+Story,Account Status UI,View account status,Accounts Management UI
+Task,Show status badge,Display account status in UI,Accounts Management UI
+Task,Integrate GET /accounts/{id}/status,Fetch and update account status,Accounts Management UI
+
+Story,Activate or Deactivate Account,Toggle account active state,Accounts Management UI
+Task,Add activate/deactivate buttons,UI buttons for account state change,Accounts Management UI
+Task,Integrate PATCH activate/deactivate,Call activate and deactivate APIs,Accounts Management UI
+
+Story,Restore Account UI,Restore soft deleted account,Accounts Management UI
+Task,Add restore action,UI action to restore account,Accounts Management UI
+Task,Integrate PATCH /restore,Call restore account API,Accounts Management UI
+
+Story,UI Polish,Improve overall UX and consistency,Accounts Management UI
+Task,Add loaders and toasts,Global loader and notification UI,Accounts Management UI
+Task,Ensure responsive design,Mobile and tablet UI support,Accounts Management UI

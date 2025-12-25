@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+.input-wrap {
+    @apply border border-gray-300 p-1 rounded-2 w-full bg-white text-gray-900 transition-all duration-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20;
+}
+
+input::placeholder {
+    @apply text-primary-50;
+}
+.input {
+    @apply py-1 focus:outline-none focus:ring-0 w-full text-sm text-primary font-light;
+}
+
+.input-label {
+    @apply text-sm font-medium text-primary-75 mb-1 pl-1 block;
+}

@@ -1,0 +1,20 @@
+/* Homepage Component Styles */
+
+/* Navigation Styles */
+.homepage-nav {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* Smooth scroll behavior */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Focus styles for accessibility */
+.homepage-nav a:focus,
+footer a:focus {
+    outline: 2px solid rgba(255, 106, 58, 0.8);
+    outline-offset: 4px;
+    border-radius: 4px;
+}

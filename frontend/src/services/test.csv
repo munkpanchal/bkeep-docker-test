@@ -1,0 +1,49 @@
+Summary,Issue Type,Description,Acceptance Criteria,Parent
+Passkey UI Integration,Epic,"Implement full UI flows for Passkey (WebAuthn) registration, login, and device management.","Epic complete when all Passkey UI stories are delivered.",""
+
+UI for Passkey Registration Flow,Story,"Create UI for Passkey-based user registration including trigger, error handling, and success redirect.","- Passkey registration trigger works
+- Success state shown
+- Errors display correctly
+- Works across supported browsers","Passkey UI Integration"
+Create 'Register with Passkey' button,Sub-task,"Add Passkey registration CTA on signup page.","Button visible on signup page.","UI for Passkey Registration Flow"
+Trigger WebAuthn create() flow,Sub-task,"Integrate navigator.credentials.create for passkey creation.","Browser native modal opens and returns credential.","UI for Passkey Registration Flow"
+Implement loading & error states,Sub-task,"Add UI states for processing passkey creation.","Errors visible (e.g. unsupported device).","UI for Passkey Registration Flow"
+Passkey success screen,Sub-task,"Show success + redirect after passkey registration.","Redirect works on completion.","UI for Passkey Registration Flow"
+
+UI for Passkey Login Flow,Story,"Implement UI for user login using passkeys.","- Login works across browsers
+- Fallback options visible
+- Errors handled gracefully","Passkey UI Integration"
+Create 'Sign in with Passkey' CTA,Sub-task,"Add login CTA.","CTA visible on login page.","UI for Passkey Login Flow"
+Trigger WebAuthn get() flow,Sub-task,"Integrate navigator.credentials.get for authentication.","Browser modal opens and authenticates.","UI for Passkey Login Flow"
+Add loading + fallback UI,Sub-task,"Provide alternate login paths + visual feedback.","Fallback flows functional.","UI for Passkey Login Flow"
+Login success redirect,Sub-task,"Redirect after successful passkey authentication.","Redirect works.","UI for Passkey Login Flow"
+
+Passkey Device Management UI,Story,"Allow users to view and delete passkeys in account settings.","- User sees all stored passkeys
+- Can delete keys
+- Empty state works","Passkey UI Integration"
+Create Passkeys settings tab,Sub-task,"Add new section under account settings.","Tab visible.","Passkey Device Management UI"
+Display list of passkeys,Sub-task,"Fetch and display user's passkeys.","List shows device names + timestamps.","Passkey Device Management UI"
+Delete passkey + confirmation flow,Sub-task,"Allow user to remove a passkey.","Confirmation modal works.","Passkey Device Management UI"
+Implement empty state,Sub-task,"Show correct UI when no passkeys exist.","Empty screen shown.","Passkey Device Management UI"
+
+Unsupported Browser Handling,Story,"Handle cases where WebAuthn is not available.","- Unsupported browsers hide passkey UI
+- Fallback flows shown","Passkey UI Integration"
+Detect browser support,Sub-task,"Implement WebAuthn support detection.","Correct detection on all browsers.","Unsupported Browser Handling"
+Show fallback CTAs,Sub-task,"Display password/OTP options when unsupported.","Fallback visible.","Unsupported Browser Handling"
+Add educational tooltip,Sub-task,"Explain what passkeys are & why unavailable.","Tooltip displays.","Unsupported Browser Handling"
+
+Frontend Integration with Backend APIs,Story,"Integrate UI with backend registration and authentication endpoints.","- Registration + authentication E2E working
+- Errors mapped to clear UX messages","Passkey UI Integration"
+Integrate Begin Registration API,Sub-task,"Call server to start registration.","Server returns challenge.","Frontend Integration with Backend APIs"
+Integrate Finish Registration API,Sub-task,"Submit passkey credential to server.","User registered.","Frontend Integration with Backend APIs"
+Integrate Begin Authentication API,Sub-task,"Start passkey login flow.","Challenge received.","Frontend Integration with Backend APIs"
+Integrate Finish Authentication API,Sub-task,"Complete login by verifying signature.","User logged in.","Frontend Integration with Backend APIs"
+Map server errors to UI,Sub-task,"Show user-friendly messages.","Messages visible.","Frontend Integration with Backend APIs"
+
+Visual Design & UX Polish,Story,"Apply Figma design, animations, accessibility, and cross-browser QA.","- UI matches design
+- A11y compliant
+- Tested on major browsers","Passkey UI Integration"
+Implement Figma UI,Sub-task,"Match UI to design specs.","Matches Figma.","Visual Design & UX Polish"
+Add animations/transitions,Sub-task,"Smooth modal + button animations.","Animations functional.","Visual Design & UX Polish"
+Accessibility checks,Sub-task,"Keyboard navigation + screen-reader compatibility.","A11y validated.","Visual Design & UX Polish"
+Cross-browser QA,Sub-task,"Test Chrome, Safari, Firefox, Edge.","No visual/UI breaks.","Visual Design & UX Polish"
